@@ -1,3 +1,3 @@
-# Kruskal ALgorithm Visualizer
+# Kruskal Algorithm Visualizer
 
 
