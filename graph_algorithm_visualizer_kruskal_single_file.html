@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Graph Visualizer — Kruskal MST</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#7c3aed;--muted:#94a3b8;--glass: rgba(255,255,255,0.03)}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef8;background:linear-gradient(180deg,#071028 0%, #07121a 60%);}
+    .app{display:grid;grid-template-columns:360px 1fr;gap:18px;height:100vh;padding:16px}
+    .panel{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);overflow:auto}
+    h2{margin:4px 0 10px;font-size:16px}
+    label{display:block;font-size:12px;color:var(--muted);margin-top:8px}
+    input[type=text], input[type=number], select{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:#e6eef8}
+    button{background:var(--accent);color:white;padding:8px 10px;border:none;border-radius:8px;cursor:pointer;margin-top:8px}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+    #cy{width:100%;height:100%;border-radius:12px;background:linear-gradient(180deg, rgba(6,10,26,0.6), rgba(3,6,12,0.6));}
+    .small{font-size:12px}
+    .row{display:flex;gap:8px}
+    .row > *{flex:1}
+    .controls{display:flex;flex-direction:column}
+    .log{font-family:monospace;font-size:13px;background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;height:160px;overflow:auto;color:#d6e9ff}
+    .chip{display:inline-block;padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.03);margin:4px;font-size:12px}
+    footer{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+  </style>
+  <!-- Cytoscape CDN -->
+  <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <div class="panel">
+      <h2>Graph Controls — Kruskal MST</h2>
+      <div class="controls">
+        <label>Add node (click canvas to place, or set label then add)</label>
+        <div class="row">
+          <input id="node-label" placeholder="Label (e.g., A)" />
+          <button id="btn-add-node">Add Node</button>
+        </div>
+
+        <label>Create edge (select source & target nodes then click 'Create Edge')</label>
+        <div class="row">
+          <input id="edge-src" placeholder="Source label" />
+          <input id="edge-tgt" placeholder="Target label" />
+        </div>
+        <label>Weight</label>
+        <div class="row">
+          <input id="edge-weight" type="number" value="1" />
+          <select id="edge-type"><option value="undirected">Undirected</option><option value="directed">Directed</option></select>
+        </div>
+        <button id="btn-add-edge">Create Edge</button>
+
+        <label>Import / Export</label>
+        <div class="row">
+          <input id="file-input" type="file" accept=".json,.csv" />
+          <button id="btn-export-json" class="ghost">Export JSON</button>
+        </div>
+        <div class="row">
+          <button id="btn-export-csv" class="ghost">Export CSV</button>
+          <button id="btn-export-png" class="ghost">Export PNG</button>
+        </div>
+
+        <label>Kruskal Controls</label>
+        <div class="row">
+          <button id="btn-run-kruskal">Run Kruskal (MST)</button>
+          <button id="btn-reset" class="ghost">Reset Highlights</button>
+        </div>
+        <label>Animation Speed</label>
+        <input id="anim-speed" type="range" min="100" max="1500" value="600" />
+
+        <label>Algorithm Output</label>
+        <div class="log" id="output">No MST run yet.</div>
+
+        <label>Quick Actions</label>
+        <div class="row">
+          <button id="btn-sample">Load Sample Graph</button>
+          <button id="btn-clear" class="ghost">Clear Graph</button>
+        </div>
+        <footer>Tip: click nodes on canvas to see their id. Drag nodes to rearrange.</footer>
+      </div>
+    </div>
+
+    <div class="panel" style="display:flex;flex-direction:column;">
+      <div id="cy"></div>
+    </div>
+  </div>
+
+  <script>
+    // Basic cytoscape setup
+    const cy = cytoscape({
+      container: document.getElementById('cy'),
+      boxSelectionEnabled: false,
+      autounselectify: false,
+      style: [
+        { selector: 'node', style: { 'background-color': '#7c3aed', 'label': 'data(label)','text-valign':'center','color':'#fff','text-outline-width':2,'text-outline-color':'#2b0d52','width': '40px','height':'40px'} },
+        { selector: 'edge', style: { 'curve-style': 'bezier','width': 4,'line-color': '#9fb6ff','target-arrow-color': '#9fb6ff','target-arrow-shape':'none','label':'data(weight)','font-size':12,'text-rotation':'autorotate'} },
+        { selector: '.mst', style: { 'line-color':'#34d399','target-arrow-color':'#34d399','width':6 } },
+        { selector: '.candidate', style: { 'line-style':'dashed','line-color':'#fbbf24' } },
+        { selector: '.faded', style: { 'opacity':0.15 } }
+      ],
+      elements: [],
+      layout: { name: 'cose' }
+    });
+
+    // Helpers
+    const $ = id => document.getElementById(id);
+    const output = $('output');
+    let nodeCount = 0;
+
+    function addNode(label, pos){
+      const id = label || `n${++nodeCount}`;
+      if(cy.$(`#${cssEscape(id)}`).length) return null;
+      const n = cy.add({ group:'nodes', data:{ id:id, label:id }, position: pos||undefined });
+      return n;
+    }
+
+    function cssEscape(s){ return s.replace(/[^a-zA-Z0-9\-_:.]/g, '_'); }
+
+    function addEdge(a,b,weight,directed=false){
+      const id = `e${a}_${b}_${Math.floor(Math.random()*10000)}`;
+      // prevent duplicate undirected edges (check both directions)
+      if(!directed){
+        const exists = cy.edges().filter(ed=>{
+          const da = ed.data('source'), db = ed.data('target');
+          return (da===a && db===b) || (da===b && db===a);
+        });
+        if(exists.length) return null;
+      }
+      const e = cy.add({ group:'edges', data:{ id:id, source:a, target:b, weight: Number(weight)||1 } });
+      if(directed) e.lock();
+      return e;
+    }
+
+    // click-canvas to place node
+    cy.on('tap', function(evt){
+      if(evt.target === cy){
+        const pos = evt.position;
+        const label = $('node-label').value.trim();
+        const lab = label || `N${nodeCount+1}`;
+        addNode(lab,pos);
+      } else if(evt.target.isNode && !evt.target.isEdge){
+        const id = evt.target.data('id');
+        console.log('Node clicked', id);
+      }
+    });
+
+    // UI hooks
+    $('btn-add-node').onclick = ()=>{ addNode($('node-label').value.trim()||undefined); $('node-label').value=''; }
+    $('btn-add-edge').onclick = ()=>{
+      const a = $('edge-src').value.trim(); const b = $('edge-tgt').value.trim(); const w = $('edge-weight').value; const t = $('edge-type').value;
+      if(!a||!b){ alert('Enter both node labels.'); return; }
+      if(!cy.$(`#${cssEscape(a)}`).length || !cy.$(`#${cssEscape(b)}`).length){ alert('One or both nodes not found. Make sure node labels match.'); return; }
+      addEdge(a,b,w,t==='directed'); $('edge-src').value=''; $('edge-tgt').value='';
+    }
+
+    $('btn-clear').onclick = ()=>{ cy.elements().remove(); nodeCount=0; output.innerText='Cleared graph.' }
+    $('btn-reset').onclick = ()=>{ cy.elements().removeClass('mst candidate faded'); output.innerText='Highlights reset.' }
+
+    $('btn-sample').onclick = ()=>{
+      cy.elements().remove(); nodeCount=0;
+      addNode('A',{x:80,y:80}); addNode('B',{x:260,y:70}); addNode('C',{x:420,y:120}); addNode('D',{x:200,y:210}); addNode('E',{x:360,y:240});
+      addEdge('A','B',2); addEdge('A','D',6); addEdge('B','D',3); addEdge('B','C',5); addEdge('B','E',4); addEdge('C','E',1); addEdge('D','E',8);
+      output.innerText='Sample graph loaded.';
+      cy.layout({name:'cose',animate:true}).run();
+    }
+
+    // simple import JSON (expected nodes: [{id,label,x,y}] edges: [{source,target,weight}])
+    $('file-input').addEventListener('change', (e)=>{
+      const f = e.target.files[0]; if(!f) return; const reader = new FileReader();
+      reader.onload = ev=>{
+        try{
+          const data = JSON.parse(ev.target.result);
+          cy.elements().remove(); nodeCount=0;
+          (data.nodes||[]).forEach(n=> addNode(n.id,{x:n.x,y:n.y}) );
+          (data.edges||[]).forEach(ed=> addEdge(ed.source, ed.target, ed.weight||1));
+          output.innerText='Imported JSON graph.';
+          cy.layout({name:'cose',animate:true}).run();
+        }catch(err){ alert('Import error: make sure file is valid JSON.'); }
+      }
+      reader.readAsText(f);
+    });
+
+    // Exports
+    $('btn-export-json').onclick = ()=>{
+      const nodes = cy.nodes().map(n=>({ id:n.data('id'), label:n.data('label'), x:n.position('x'), y:n.position('y') }));
+      const edges = cy.edges().map(e=>({ source:e.data('source'), target:e.data('target'), weight:e.data('weight') }));
+      const blob = new Blob([JSON.stringify({nodes,edges},null,2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='graph.json'; a.click(); URL.revokeObjectURL(url);
+    }
+    $('btn-export-csv').onclick = ()=>{
+      let rows = ['source,target,weight'];
+      cy.edges().forEach(e=> rows.push(`${e.data('source')},${e.data('target')},${e.data('weight')}`));
+      const blob = new Blob([rows.join('\n')],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='edges.csv'; a.click(); URL.revokeObjectURL(url);
+    }
+    $('btn-export-png').onclick = ()=>{
+      const data = cy.png({full:true}); const a=document.createElement('a'); a.href=data; a.download='graph.png'; a.click();
+    }
+
+    // Kruskal implementation (works for undirected graphs) + visualization
+    function runKruskal(){
+      // prepare edges list
+      const edges = cy.edges().map(e=>({ id:e.id(), source:e.data('source'), target:e.data('target'), weight: Number(e.data('weight')||1), element: e }));
+      if(edges.length===0){ output.innerText='No edges in graph.'; return; }
+      // for Kruskal, treat as undirected: create normalized pair
+      const normalized = [];
+      edges.forEach(ed=>{
+        const s = ed.source, t = ed.target;
+        normalized.push({ id:ed.id, a:s, b:t, weight:ed.weight, element:ed.element });
+      });
+      normalized.sort((x,y)=> x.weight - y.weight );
+
+      // union-find
+      const nodes = cy.nodes().map(n=>n.data('id'));
+      const parent = {}; nodes.forEach(v=> parent[v]=v);
+      function find(x){ if(parent[x]===x) return x; parent[x]=find(parent[x]); return parent[x]; }
+      function union(a,b){ parent[find(a)] = find(b); }
+
+      // UI reset
+      cy.elements().removeClass('mst candidate faded');
+      cy.elements().addClass('faded');
+      const mst = []; let total=0;
+
+      // step through edges with animation
+      const speed = Number($('anim-speed').value);
+      output.innerText='Running Kruskal...\n';
+      let i=0;
+      function step(){
+        if(i>=normalized.length){
+          // done
+          output.innerText += `\nMST complete. Total cost = ${total}\nEdges:\n` + mst.map(e=>`${e.a} - ${e.b} (${e.weight})`).join('\n');
+          // highlight MST edges strongly and remove faded from them
+          mst.forEach(e=>{ e.element.removeClass('candidate'); e.element.addClass('mst'); e.element.connectedNodes().removeClass('faded'); });
+          return;
+        }
+        const ed = normalized[i++];
+        output.innerText += `Considering edge ${ed.a} - ${ed.b} (w=${ed.weight})\n`;
+        // mark candidate visually
+        ed.element.removeClass('faded'); ed.element.addClass('candidate');
+        // check if adding creates cycle
+        const ra = find(ed.a), rb = find(ed.b);
+        if(ra !== rb){
+          // accept
+          union(ra,rb); mst.push(ed); total += ed.weight;
+          output.innerText += `--> Accepted\n`;
+        } else {
+          output.innerText += `--> Rejected (would create cycle)\n`;
+          // visually keep as faded after short time
+          setTimeout(()=>{ ed.element.removeClass('candidate'); ed.element.addClass('faded'); }, speed/2);
+        }
+        // continue next step
+        setTimeout(step, speed);
+      }
+      step();
+    }
+
+    $('btn-run-kruskal').onclick = runKruskal;
+
+    // layout on resize
+    window.addEventListener('resize', ()=> cy.resize());
+  </script>
+</body>
+</html>
