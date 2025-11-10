@@ -4,7 +4,7 @@ This project is a web-based interactive tool for visualizing graph algorithms, s
 
 ## Live Demo
 
-[Link to live demo](https://tanzzr.github.io/graph-visualizer)
+[Link to live demo](https://tanzzr.github.io/KruskalAlgoVisualizer)
 
 ## Features
 
