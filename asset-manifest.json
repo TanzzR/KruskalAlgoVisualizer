@@ -1,0 +1,19 @@
+{
+  "files": {
+    "main.css": "/KruskalAlgoVisualizer/static/css/main.6f05e211.css",
+    "main.js": "/KruskalAlgoVisualizer/static/js/main.cd387288.js",
+    "static/js/977.a4d3b801.chunk.js": "/KruskalAlgoVisualizer/static/js/977.a4d3b801.chunk.js",
+    "static/js/455.6d381e85.chunk.js": "/KruskalAlgoVisualizer/static/js/455.6d381e85.chunk.js",
+    "static/js/453.77f06c5b.chunk.js": "/KruskalAlgoVisualizer/static/js/453.77f06c5b.chunk.js",
+    "index.html": "/KruskalAlgoVisualizer/index.html",
+    "main.6f05e211.css.map": "/KruskalAlgoVisualizer/static/css/main.6f05e211.css.map",
+    "main.cd387288.js.map": "/KruskalAlgoVisualizer/static/js/main.cd387288.js.map",
+    "977.a4d3b801.chunk.js.map": "/KruskalAlgoVisualizer/static/js/977.a4d3b801.chunk.js.map",
+    "455.6d381e85.chunk.js.map": "/KruskalAlgoVisualizer/static/js/455.6d381e85.chunk.js.map",
+    "453.77f06c5b.chunk.js.map": "/KruskalAlgoVisualizer/static/js/453.77f06c5b.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.6f05e211.css",
+    "static/js/main.cd387288.js"
+  ]
+}
