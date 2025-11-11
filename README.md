@@ -1,4 +1,4 @@
-# Graph Visualizer
+# Kruskal Algorithm Graph Visualizer
 
 This project is a web-based interactive tool for visualizing graph algorithms, specifically Kruskal's algorithm for finding the Minimum Spanning Tree (MST).
 
